@@ -2,8 +2,11 @@
 #include <WiFi.h>
 #include <TinyGPS++.h>
 
+#define RXD2 16
+#define TXD2 17
+
+HardwareSerial neogps(2);
 TinyGPSPlus gps;
-HardwareSerial serialGPS(2);
 
 const int MPU_addr = 0x68;  // I2C address of the MPU-6050
 int16_t AcX, AcY, AcZ, Tmp, GyX, GyY, GyZ;
@@ -16,7 +19,7 @@ byte trigger1count = 0;
 byte trigger2count = 0;
 byte trigger3count = 0;
 int angleChange = 0;
-const int buzzerPin = 18;
+int buzzerPin = 5;
 
 const char *ssid = "QUOC HUNG LAU 1"; // SSID của WIFI
 const char *pass = "@Lamvanha25011973"; // Password của WiFi
@@ -27,7 +30,7 @@ const char *privateKey = "c3IEHJY8SL8qK3zcfznXDt";
 
 void setup() {
   Serial.begin(115200);
-  serialGPS.begin(9600, SERIAL_8N1, 16, 17);
+  neogps.begin(9600, SERIAL_8N1, RXD2, TXD2);
   Wire.begin();
   Wire.beginTransmission(MPU_addr);
   Wire.write(0x6B);
@@ -46,8 +49,23 @@ void setup() {
 }
 
 void loop() {
-    while (serialGPS.available() > 0) {
-        gps.encode(serialGPS.read());
+    boolean newData = false;
+
+    while (neogps.available()) {
+        if (gps.encode(neogps.read())) {
+            newData = true;
+            displayInfo();
+        }
+    }
+
+    if (newData) {
+        Serial.print("Number of Satellites: ");
+        Serial.println(gps.satellites.value());
+    }
+
+    if (millis() > 5000 && gps.charsProcessed() < 10)
+    {
+      Serial.println(F("No GPS detected: check your wires."));
     }
 
     mpu_read();
@@ -103,19 +121,35 @@ void loop() {
                 trigger3count = 0;
                 Serial.println("FALL DETECTED");
 
-                digitalWrite(buzzerPin, HIGH); // Kích hoạt còi
-                delay(3000); // Cho còi kêu trong 3 giây
-                digitalWrite(buzzerPin, LOW); // Tắt còi
-
                 char details[500];
                 if (gps.location.isValid()) {
-                    snprintf(details, 500, "Latitude: %.6f, Longitude: %.6f",
-                            gps.location.lat(), gps.location.lng());
+                  snprintf(details, 500, "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f",
+                                          gps.location.lat(), gps.location.lng());
                 } else {
                     snprintf(details, 500, "GPS signal not available");
                 }
 
                 send_event("FALL DETECTION", details);
+
+                for (int j = 0; j < 10; j++) {
+                    for (int i = 0; i < 80; i++) {
+                        digitalWrite(buzzerPin, HIGH);
+                        delay(1);
+                        digitalWrite(buzzerPin, LOW);
+                        delay(1);
+                    }
+
+                    for (int i = 0; i < 100; i++) {
+                        digitalWrite(buzzerPin, HIGH);
+                        delay(2);
+                        digitalWrite(buzzerPin, LOW);
+                        delay(2);
+                    }
+
+                    delay(10); // Nghỉ 10ms
+                }
+
+                digitalWrite(buzzerPin, LOW); // Tắt còi
             } else {
                 trigger3 = false;
                 trigger3count = 0;
@@ -136,6 +170,56 @@ void loop() {
         Serial.println("TRIGGER 1 DECACTIVATED");
     }
     delay(100);
+}
+
+void displayInfo() {
+  Serial.print(F("Location: ")); 
+  if (gps.location.isValid())
+  {
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
+  }
+  else
+  {
+    Serial.print(F("INVALID "));
+  }
+
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID "));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+  }
+  else
+  {
+    Serial.print(F("INVALID "));
+  }
+
+  Serial.println();
 }
 
 void mpu_read() {
