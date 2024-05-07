@@ -19,6 +19,7 @@ byte trigger1count = 0;
 byte trigger2count = 0;
 byte trigger3count = 0;
 int angleChange = 0;
+static const uint32_t GPSBaud = 9600;
 int buzzerPin = 5;
 
 const char *ssid = "QUOC HUNG LAU 1"; // SSID của WIFI
@@ -30,7 +31,7 @@ const char *privateKey = "c3IEHJY8SL8qK3zcfznXDt";
 
 void setup() {
   Serial.begin(115200);
-  neogps.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  neogps.begin(GPSBaud, SERIAL_8N1, RXD2, TXD2);
   Wire.begin();
   Wire.beginTransmission(MPU_addr);
   Wire.write(0x6B);
@@ -123,10 +124,10 @@ void loop() {
 
                 char details[500];
                 if (gps.location.isValid()) {
-                  snprintf(details, 500, "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f",
-                                          gps.location.lat(), gps.location.lng());
+                  snprintf(details, 500, "https://www.google.com/maps?q=%.6f,%.6f",
+                          gps.location.lat(), gps.location.lng());
                 } else {
-                    snprintf(details, 500, "GPS signal not available");
+                  snprintf(details, 500, "GPS signal not available");
                 }
 
                 send_event("FALL DETECTION", details);
